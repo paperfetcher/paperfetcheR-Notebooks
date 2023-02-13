@@ -1,0 +1,165 @@
+---
+title: "Handsearching with paperfetcher"
+output: html_notebook
+---
+
+This [R Markdown](http://rmarkdown.rstudio.com) Notebook demonstrates how to use the paperfetcher Python package to perform handsearching in R through the [reticulate](https://https://rstudio.github.io/reticulate/) interface to Python.
+
+To execute a code chunk in RStudio, click the *Run* button within the chunk or place your cursor inside it and press *Cmd+Shift+Enter*. 
+
+# Setup
+
+We first need to run a couple of lines of code to install reticulate, Python, and paperfetcher.
+
+```{r}
+# Install reticulate if not already installed
+if(!require("reticulate")){
+  install.packages("reticulate")
+  library(reticulate)
+}
+
+# Install Python if not already installed, and create a new virtualenv for paperfetcher
+# (Uncomment the lines below to run code)
+#install_python("3.7:latest")
+#virtualenv_create("paperfetcher", version="3.7:latest")
+#use_virtualenv("paperfetcher")
+
+# Install paperfetcher
+# (Uncomment the lines below to run code)
+#py_install("paperfetcher", envname="paperfetcher")
+
+# Import the paperfetcher package
+paperfetcher <- import("paperfetcher")
+```
+
+# Handsearching
+
+Let's perform a simple task: to search for all journal articles published in the journal Science between January 01, 2023 and January 31, 2023.
+
+A quick Google search reveals that the ISSN for the online edition of Science is 1095-9203.
+
+Now let's use this information to create a search object:
+
+```{r}
+search <- paperfetcher$handsearch$CrossrefSearch(ISSN="1095-9203", from_date="2023-01-01", until_date="2023-02-01")
+search()
+```
+
+How many articles did our search return?
+
+```{r}
+py_len(search)
+```
+
+This was rather slow... Can we speed this up?
+
+*Yes, we can!*
+
+**Why was the search so slow?**
+
+Paperfetcher retrieved all the metadata available on Crossref for each paper. Each paper can have a lot of metadata (abstract, citations, keywords, funding information, etc.) deposited on Crossref, and retrieving all this informating can take a lot of time (and also, memory!).
+
+**How do we make it faster?**
+
+By retrieving only the metadata we need!
+
+For example, let's say we need DOI, URL, article title, author list, and publication date. As per the Crossref API, these fields are:
+`DOI`, `URL`, `title`, `author`, and `issued`. We can ask paperfetcher to only select these fields using the 'select_fields' parameter:
+
+```{r}
+search <- paperfetcher$handsearch$CrossrefSearch(ISSN="1095-9203", from_date="2023-01-01", until_date="2023-02-01")
+
+search(select=TRUE, select_fields=list('DOI', 'URL', 'title', 'author', 'issued', 'abstract'))
+```
+
+**Filtering articles by keywords**
+
+We can also pass a list of keywords to paperfetcher to refine our search:
+
+```{r}
+search <- paperfetcher$handsearch$CrossrefSearch(ISSN="1095-9203", from_date="2022-01-01", until_date="2023-01-01", keyword_list=list("COVID"))
+
+search(select=TRUE, select_fields=list('DOI', 'URL', 'title', 'author', 'issued', 'abstract'))
+```
+
+
+## Extracting data from the search results
+
+paperfetcher provides many different ways to access the search result data, using special data structures called Datasets.
+
+For example, we can make a Dataset of DOIs from the search results:
+
+```{r}
+doi_ds <- search$get_DOIDataset()
+```
+
+We can display this as a DataFrame:
+
+```{r}
+doi_ds$to_df()
+```
+
+We can also make a Dataset containing all the fields we retrieved, and display this as a DataFrame:
+
+```{r}
+parsers <- import("paperfetcher.parsers", convert=FALSE)
+
+ds <- search$get_CitationsDataset(field_list=list('DOI', 'URL', 'title', 'author', 'issued'),
+                                  field_parsers_list=list(NULL, NULL, parsers$crossref_title_parser,
+                                                     parsers$crossref_authors_parser, 
+                                                     parsers$crossref_date_parser))
+ds$to_df()
+```
+
+
+## Exporting data
+
+We can save the search results to 
+
+- a text file using the save_txt method:
+
+```{r}
+ds$save_txt("out/handsearching_citations.txt")
+```
+
+- a CSV file using the save_csv method:
+
+```{r}
+ds$save_csv("out/handsearching_citations.csv")
+```
+
+- an Excel file using the save_excel method:
+
+```{r}
+ds$save_excel("out/handsearching_citations.xslx")
+```
+
+## Exporting data to RIS format
+
+Citation data stored in the RIS (Research Information Systems) file format can easily be imported into systematic review screening tools (such as Covidence) and citation management software (such as Zotero). Paperfetcher can export search results to RIS files. Let's take a look:
+
+**Exporting to RIS format without abstracts**
+
+Paperfetcher uses [Crossref's content negotiation service](https://www.crossref.org/documentation/retrieve-metadata/content-negotiation/) to get RIS data for each DOI. Unfortunately, this does not contain abstracts. However, there is a workaround, which we'll get to in a bit.
+
+First, let's see how to export data to RIS format without abstracts:
+
+```{r}
+ds <- search$get_RISDataset()
+ds$save_ris("out/handsearching.ris")
+```
+
+**Exporting to RIS format with abstracts**
+
+Recall that we have already retrieved abstracts during our search. We can insert these abstracts as an extra field into the RIS dataset. Here's how:
+
+```{r}
+ds <- search$get_RISDataset(extra_field_list=list("abstract"),
+                           extra_field_parser_list=list(NULL),
+                           extra_field_rispy_tags=list("notes_abstract"))
+
+ds$save_ris("out/handsearching_abstracts.ris")
+```
+
+
+
