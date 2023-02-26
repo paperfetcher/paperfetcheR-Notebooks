@@ -1,0 +1,138 @@
+---
+title: "Citation searching with paperfetcher"
+output: html_notebook
+---
+
+This [R Markdown](http://rmarkdown.rstudio.com) Notebook demonstrates how to use the paperfetcher Python package to perform forward and backward citation searching in R through the [reticulate](https://https://rstudio.github.io/reticulate/) interface to Python.
+
+To execute a code chunk in RStudio, click the *Run* button within the chunk or place your cursor inside it and press *Cmd+Shift+Enter*.
+
+# Setup
+
+We first need to run a couple of lines of code to install reticulate, Python, and paperfetcher.
+
+```{r}
+# Install reticulate if not already installed
+if(!require("reticulate")){
+  install.packages("reticulate")
+  library(reticulate)
+}
+
+# Install Python if not already installed, and create a new virtualenv for paperfetcher
+# (Uncomment the lines below to run code)
+#install_python("3.7:latest")
+#virtualenv_create("paperfetcher", version="3.7:latest")
+#use_virtualenv("paperfetcher")
+
+# Install paperfetcher
+# (Uncomment the lines below to run code)
+#py_install("paperfetcher", envname="paperfetcher")
+
+# Import the paperfetcher package
+paperfetcher <- import("paperfetcher")
+```
+
+# Snowballing backwards (also called backward reference chasing, backward reference search, or backward citation search) with Crossref
+
+Backward reference chasing involves retrieving all articles which are referenced (cited) by a set of starting articles.
+
+Let's fetch all the references from two papers with DOIs:
+
+- 10.1021/acs.jpcb.1c02191
+- 10.1073/10.1080/07448481.2022.2059376
+
+using the Crossref service.
+
+First, we create a search object, and initialize it with a list of strings, each string being a DOI:
+
+```{r}
+search <- paperfetcher$snowballsearch$CrossrefBackwardReferenceSearch(list("10.1021/acs.jpcb.1c02191", "10.1080/07448481.2022.2059376"))
+search()
+```
+
+How many articles did our search return?
+
+```{r}
+py_len(search)
+```
+
+# Extracting data from the search results
+
+Just as we did for handsearching, we can get a Dataset of DOIs from the search results:
+
+```{r}
+doi_ds <- search$get_DOIDataset()
+```
+
+We can display this as a DataFrame:
+
+```{r}
+doi_ds$to_df()
+```
+Or save it to a text file:
+
+```{r}
+doi_ds$save_txt("out/snowball_back.txt")
+```
+
+We can also convert it to RIS format:
+
+```{r}
+ris_ds <- search$get_RISDataset()
+```
+
+And save it to an RIS file:
+
+```{r}
+ris_ds$save_ris("out/snowball_back.ris")
+```
+
+# Snowballing backwards with COCI
+
+We can also perform backward snowballing with COCI, the OpenCitations Index of Crossref DOI-to-DOI citations.
+
+The syntax is similar to that of Crossref:
+
+```{r}
+search <- paperfetcher$snowballsearch$COCIBackwardReferenceSearch(list("10.1021/acs.jpcb.1c02191", "10.1080/07448481.2022.2059376"))
+search()
+doi_ds <- search$get_DOIDataset()
+doi_ds$to_df()
+```
+
+# Snowballing forwards (also called forward citation chasing or forward citation search) with COCI
+
+Forward citation chasing involves retrieving all articles which cite a set of starting articles.
+
+Let's fetch all the citations of two papers with DOIs:
+
+- 10.1021/acs.jpcb.1c02191
+- 10.1073/10.1080/07448481.2022.2059376
+
+using the COCI service. We cannot use the Crossref service for this task.
+
+The syntax is similar to that of backward search:
+
+```{r}
+search <- paperfetcher$snowballsearch$COCIForwardCitationSearch(list("10.1021/acs.jpcb.1c02191", "10.1080/07448481.2022.2059376"))
+search()
+doi_ds <- search$get_DOIDataset()
+doi_ds$to_df()
+```
+
+Again, we can save the search results to a text file:
+
+```{r}
+doi_ds$save_txt("out/snowball_fwd.txt")
+```
+
+Or to an RIS file:
+
+```{r}
+ris_ds <- search$get_RISDataset()
+ris_ds$save_ris("out/snowball_fwd.ris")
+```
+
+
+
+

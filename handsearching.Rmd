@@ -131,7 +131,7 @@ ds$save_csv("out/handsearching_citations.csv")
 - an Excel file using the save_excel method:
 
 ```{r}
-ds$save_excel("out/handsearching_citations.xslx")
+ds$save_excel("out/handsearching_citations")
 ```
 
 ## Exporting data to RIS format
